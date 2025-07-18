@@ -493,7 +493,7 @@ function App() {
 
       <div className="container mx-auto px-4 py-6">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg p-6 shadow-md border-l-4 border-blue-500">
             <div className="flex items-center">
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 rounded-full mr-4">
@@ -517,6 +517,20 @@ function App() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Kategorien</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.categories_count || 0}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-6 shadow-md border-l-4 border-purple-500">
+            <div className="flex items-center">
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-3 rounded-full mr-4">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M15.707 14.293a1 1 0 010 1.414l-1.414 1.414a1 1 0 01-1.414 0l-11-11a1 1 0 010-1.414l1.414-1.414a1 1 0 011.414 0l11 11z"/>
+                  <path d="M13 6l3 3-1.5 1.5L11 7 13 6z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Datei-Anhänge</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total_attachments || 0}</p>
               </div>
             </div>
           </div>
