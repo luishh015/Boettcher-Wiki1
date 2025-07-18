@@ -819,6 +819,78 @@ function App() {
                   placeholder="z.B. scanner, hardware, fehlerbehebung"
                 />
               </div>
+
+              {/* File Upload Section */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Datei-Anhänge</label>
+                
+                {/* Drag & Drop Area */}
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragOver 
+                      ? 'border-blue-400 bg-blue-50' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-600">
+                    <span className="font-medium">Dateien hierher ziehen</span> oder
+                  </p>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip,.rar"
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                  >
+                    📁 Dateien auswählen
+                  </label>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Unterstützt: Bilder, PDFs, Office-Dokumente (max. 10MB)
+                  </p>
+                </div>
+
+                {/* Uploaded Files List */}
+                {uploadedFiles.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h5 className="text-sm font-medium text-gray-700">Hochgeladene Dateien:</h5>
+                    {uploadedFiles.map(file => (
+                      <div key={file.id} className="flex items-center bg-gray-50 rounded-lg p-3">
+                        {file.file_type === 'images' && file.thumbnail ? (
+                          <img 
+                            src={`data:image/jpeg;base64,${file.thumbnail}`}
+                            alt={file.filename}
+                            className="w-10 h-10 rounded object-cover mr-3"
+                          />
+                        ) : (
+                          <span className="text-2xl mr-3">{getFileIcon(file.file_type)}</span>
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{file.filename}</p>
+                          <p className="text-sm text-gray-500">{formatFileSize(file.file_size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedFile(file.id)}
+                          className="ml-2 px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm"
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="flex gap-4">
                 <button
                   type="button"
