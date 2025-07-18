@@ -675,6 +675,38 @@ function App() {
                       )}
                     </div>
 
+                    {/* File Attachments */}
+                    {entry.attachments && entry.attachments.length > 0 && (
+                      <div className="mb-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">📎 Anhänge:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {entry.attachments.map(attachment => (
+                            <div key={attachment.id} className="flex items-center bg-gray-50 rounded-lg p-2 text-sm">
+                              {attachment.file_type === 'images' && attachment.thumbnail ? (
+                                <img 
+                                  src={`data:image/jpeg;base64,${attachment.thumbnail}`}
+                                  alt={attachment.filename}
+                                  className="w-8 h-8 rounded object-cover mr-2"
+                                />
+                              ) : (
+                                <span className="text-lg mr-2">{getFileIcon(attachment.file_type)}</span>
+                              )}
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-800 truncate max-w-40">{attachment.filename}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(attachment.file_size)}</p>
+                              </div>
+                              <button
+                                onClick={() => downloadFile(attachment.id, attachment.filename)}
+                                className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-xs"
+                              >
+                                Download
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="text-sm text-gray-500">
                       Erstellt: {new Date(entry.created_at).toLocaleDateString('de-DE')}
                     </div>
