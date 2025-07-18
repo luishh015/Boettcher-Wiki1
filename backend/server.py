@@ -1,75 +1,193 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
-import uuid
+from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
 from datetime import datetime
+import os
+from pymongo import MongoClient
+import uuid
+import re
 
+app = FastAPI(title="Böttcher Wiki API", version="1.0.0")
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
-
-
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# MongoDB connection
+MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
+client = MongoClient(MONGO_URL)
+db = client.boettcher_wiki
+questions_collection = db.questions
+answers_collection = db.answers
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Pydantic models
+class Question(BaseModel):
+    id: Optional[str] = None
+    question_text: str
+    category: str
+    author: str
+    created_at: Optional[datetime] = None
+    tags: List[str] = []
+    answered: bool = False
+
+class Answer(BaseModel):
+    id: Optional[str] = None
+    question_id: str
+    answer_text: str
+    author: str
+    created_at: Optional[datetime] = None
+    helpful_count: int = 0
+
+class QuestionAnswer(BaseModel):
+    question: Question
+    answer: Optional[Answer] = None
+
+class SearchQuery(BaseModel):
+    query: str
+    category: Optional[str] = None
+
+# API Routes
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "service": "Böttcher Wiki API"}
+
+@app.post("/api/questions", response_model=Question)
+async def create_question(question: Question):
+    """Neue Frage hinzufügen"""
+    question.id = str(uuid.uuid4())
+    question.created_at = datetime.utcnow()
+    question.answered = False
+    
+    # Insert into database
+    questions_collection.insert_one(question.dict())
+    return question
+
+@app.get("/api/questions", response_model=List[QuestionAnswer])
+async def get_all_questions(category: Optional[str] = None, limit: int = 50):
+    """Alle Fragen mit Antworten abrufen"""
+    query = {}
+    if category:
+        query["category"] = category
+    
+    questions = list(questions_collection.find(query).sort("created_at", -1).limit(limit))
+    result = []
+    
+    for q in questions:
+        q["_id"] = str(q["_id"])
+        question_obj = Question(**q)
+        
+        # Get answer if exists
+        answer_doc = answers_collection.find_one({"question_id": q["id"]})
+        answer_obj = None
+        if answer_doc:
+            answer_doc["_id"] = str(answer_doc["_id"])
+            answer_obj = Answer(**answer_doc)
+        
+        result.append(QuestionAnswer(question=question_obj, answer=answer_obj))
+    
+    return result
+
+@app.post("/api/questions/{question_id}/answer", response_model=Answer)
+async def create_answer(question_id: str, answer: Answer):
+    """Antwort zu einer Frage hinzufügen"""
+    # Check if question exists
+    question = questions_collection.find_one({"id": question_id})
+    if not question:
+        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
+    
+    # Check if answer already exists
+    existing_answer = answers_collection.find_one({"question_id": question_id})
+    if existing_answer:
+        raise HTTPException(status_code=400, detail="Antwort bereits vorhanden")
+    
+    answer.id = str(uuid.uuid4())
+    answer.question_id = question_id
+    answer.created_at = datetime.utcnow()
+    answer.helpful_count = 0
+    
+    # Insert answer
+    answers_collection.insert_one(answer.dict())
+    
+    # Update question as answered
+    questions_collection.update_one(
+        {"id": question_id},
+        {"$set": {"answered": True}}
+    )
+    
+    return answer
+
+@app.post("/api/search", response_model=List[QuestionAnswer])
+async def search_questions(search_query: SearchQuery):
+    """Fragen durchsuchen"""
+    query = {}
+    
+    # Text search in question text and tags
+    if search_query.query:
+        search_pattern = re.compile(search_query.query, re.IGNORECASE)
+        query["$or"] = [
+            {"question_text": {"$regex": search_pattern}},
+            {"tags": {"$regex": search_pattern}}
+        ]
+    
+    # Category filter
+    if search_query.category:
+        query["category"] = search_query.category
+    
+    questions = list(questions_collection.find(query).sort("created_at", -1))
+    result = []
+    
+    for q in questions:
+        q["_id"] = str(q["_id"])
+        question_obj = Question(**q)
+        
+        # Get answer if exists
+        answer_doc = answers_collection.find_one({"question_id": q["id"]})
+        answer_obj = None
+        if answer_doc:
+            answer_doc["_id"] = str(answer_doc["_id"])
+            answer_obj = Answer(**answer_doc)
+        
+        result.append(QuestionAnswer(question=question_obj, answer=answer_obj))
+    
+    return result
+
+@app.get("/api/categories")
+async def get_categories():
+    """Verfügbare Kategorien abrufen"""
+    categories = questions_collection.distinct("category")
+    return {"categories": categories}
+
+@app.get("/api/stats")
+async def get_stats():
+    """Statistiken abrufen"""
+    total_questions = questions_collection.count_documents({})
+    answered_questions = questions_collection.count_documents({"answered": True})
+    unanswered_questions = total_questions - answered_questions
+    
+    return {
+        "total_questions": total_questions,
+        "answered_questions": answered_questions,
+        "unanswered_questions": unanswered_questions
+    }
+
+@app.delete("/api/questions/{question_id}")
+async def delete_question(question_id: str):
+    """Frage löschen"""
+    result = questions_collection.delete_one({"id": question_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
+    
+    # Also delete associated answer
+    answers_collection.delete_one({"question_id": question_id})
+    
+    return {"message": "Frage erfolgreich gelöscht"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

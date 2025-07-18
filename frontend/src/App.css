@@ -1,38 +1,208 @@
-.App {
-    text-align: center;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for Böttcher Wiki */
+.bike-gradient {
+  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);
 }
 
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.bike-shadow {
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.bike-border {
+  border-image: linear-gradient(45deg, #3B82F6, #1E40AF) 1;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1E40AF;
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.3s ease;
+}
+
+/* Custom form styles */
+.form-input {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
+}
+
+.form-input:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+/* Button animations */
+.btn-primary {
+  @apply px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+}
+
+.btn-secondary {
+  @apply px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all duration-200;
+}
+
+.btn-secondary:hover {
+  transform: translateY(-1px);
+}
+
+/* Card hover effects */
+.question-card {
+  @apply bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500 transition-all duration-200;
+}
+
+.question-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading animation */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3B82F6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .question-card {
+    padding: 1rem;
+  }
+}
+
+/* Status badges */
+.status-answered {
+  @apply px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full;
+}
+
+.status-pending {
+  @apply px-3 py-1 bg-orange-100 text-orange-800 text-sm rounded-full;
+}
+
+/* Tag styles */
+.tag {
+  @apply px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full;
+}
+
+.tag:hover {
+  @apply bg-blue-200;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Header enhancements */
+.header-logo {
+  background: linear-gradient(135deg, #3B82F6, #1E40AF);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Stats card animations */
+.stats-card {
+  @apply bg-white rounded-lg p-6 shadow-md transition-all duration-200;
+}
+
+.stats-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Search bar enhancements */
+.search-container {
+  position: relative;
+}
+
+.search-input {
+  @apply form-input pl-10;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6B7280;
+}
+
+/* Answer section styling */
+.answer-section {
+  @apply mt-4 p-4 bg-green-50 rounded-lg border-l-4 border-green-500;
+}
+
+.answer-section:hover {
+  @apply bg-green-100;
+}
+
+/* Empty state styling */
+.empty-state {
+  @apply text-center py-16;
+}
+
+.empty-state svg {
+  @apply mx-auto mb-4 text-gray-300;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-flex {
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+    gap: 1rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
 }
 
-.App-link {
-    color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Print styles */
+@media print {
+  .no-print {
+    display: none;
+  }
+  
+  .question-card {
+    page-break-inside: avoid;
+  }
 }
