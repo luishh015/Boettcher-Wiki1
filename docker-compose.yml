@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: boettcher-wiki-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - boettcher-wiki
+
+  backend:
+    build: ./backend
+    container_name: boettcher-wiki-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/
+      - SECRET_KEY=your-production-secret-key
+    volumes:
+      - ./backend:/app
+    networks:
+      - boettcher-wiki
+
+  frontend:
+    build: ./frontend
+    container_name: boettcher-wiki-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - boettcher-wiki
+
+volumes:
+  mongodb_data:
+
+networks:
+  boettcher-wiki:
+    driver: bridge
