@@ -17,13 +17,16 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUser, setAdminUser] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Form states
   const [newEntry, setNewEntry] = useState({
     question: '',
     answer: '',
     category: '',
-    tags: []
+    tags: [],
+    attachments: []
   });
 
   const [newCategory, setNewCategory] = useState({
