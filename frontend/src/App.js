@@ -10,11 +10,13 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [stats, setStats] = useState({});
   const [showAddEntry, setShowAddEntry] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedEntryId, setExpandedEntryId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUser, setAdminUser] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   // Form states
   const [newEntry, setNewEntry] = useState({
@@ -22,6 +24,13 @@ function App() {
     answer: '',
     category: '',
     tags: []
+  });
+
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    icon: '',
+    color: 'bg-blue-100 text-blue-800 border-blue-500',
+    description: ''
   });
 
   const [loginData, setLoginData] = useState({
@@ -211,6 +220,72 @@ function App() {
     }
   };
 
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const token = localStorage.getItem('admin_token');
+      
+      const response = await fetch(`${BACKEND_URL}/api/categories`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newCategory)
+      });
+      
+      if (response.ok) {
+        setNewCategory({ name: '', icon: '', color: 'bg-blue-100 text-blue-800 border-blue-500', description: '' });
+        setShowAddCategory(false);
+        fetchCategories();
+        fetchStats();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Fehler beim Hinzufügen der Kategorie');
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Fehler beim Hinzufügen der Kategorie');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteEntry = async (entryId) => {
+    if (!deleteConfirm || deleteConfirm !== entryId) {
+      setDeleteConfirm(entryId);
+      setTimeout(() => setDeleteConfirm(null), 3000); // Auto-hide after 3 seconds
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('admin_token');
+      
+      const response = await fetch(`${BACKEND_URL}/api/knowledge/${entryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        fetchKnowledgeEntries();
+        fetchStats();
+        setDeleteConfirm(null);
+      } else {
+        alert('Fehler beim Löschen des Eintrags');
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      alert('Fehler beim Löschen des Eintrags');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleExpanded = (entryId) => {
     setExpandedEntryId(expandedEntryId === entryId ? null : entryId);
   };
@@ -227,6 +302,10 @@ function App() {
         return '📋';
       case 'Wartung':
         return '⚙️';
+      case 'Sicherheit':
+        return '🛡️';
+      case 'Schulung':
+        return '🎓';
       default:
         return '📘';
     }
@@ -244,10 +323,27 @@ function App() {
         return 'bg-orange-100 text-orange-800 border-orange-500';
       case 'Wartung':
         return 'bg-red-100 text-red-800 border-red-500';
+      case 'Sicherheit':
+        return 'bg-red-100 text-red-800 border-red-500';
+      case 'Schulung':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-500';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-500';
     }
   };
+
+  const predefinedColors = [
+    { name: 'Blau', value: 'bg-blue-100 text-blue-800 border-blue-500' },
+    { name: 'Grün', value: 'bg-green-100 text-green-800 border-green-500' },
+    { name: 'Lila', value: 'bg-purple-100 text-purple-800 border-purple-500' },
+    { name: 'Orange', value: 'bg-orange-100 text-orange-800 border-orange-500' },
+    { name: 'Rot', value: 'bg-red-100 text-red-800 border-red-500' },
+    { name: 'Indigo', value: 'bg-indigo-100 text-indigo-800 border-indigo-500' },
+    { name: 'Gelb', value: 'bg-yellow-100 text-yellow-800 border-yellow-500' },
+    { name: 'Rosa', value: 'bg-pink-100 text-pink-800 border-pink-500' }
+  ];
+
+  const commonIcons = ['📘', '🔧', '💻', '📋', '⚙️', '🛡️', '🎓', '🔍', '📊', '🏭', '🔬', '📞', '🎨', '🌟'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -385,14 +481,20 @@ function App() {
           </div>
         </div>
 
-        {/* Admin Add Entry Button - nur für eingeloggte Admins */}
+        {/* Admin Action Buttons - nur für eingeloggte Admins */}
         {isAdmin && (
-          <div className="mb-6">
+          <div className="flex gap-4 mb-6">
             <button
               onClick={() => setShowAddEntry(true)}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all transform hover:scale-105 shadow-md"
             >
               ➕ Neue Frage/Antwort hinzufügen
+            </button>
+            <button
+              onClick={() => setShowAddCategory(true)}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all transform hover:scale-105 shadow-md"
+            >
+              🏷️ Neue Kategorie hinzufügen
             </button>
           </div>
         )}
@@ -414,10 +516,24 @@ function App() {
               <div key={entry.id} className={`bg-white rounded-lg shadow-md p-6 border-l-4 transition-all duration-200 hover:shadow-lg ${getCategoryColor(entry.category).split(' ')[2]}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center mb-3">
+                    <div className="flex items-center justify-between mb-3">
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(entry.category)}`}>
                         {getCategoryIcon(entry.category)} {entry.category}
                       </span>
+                      
+                      {/* Admin Delete Button */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteEntry(entry.id)}
+                          className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                            deleteConfirm === entry.id
+                              ? 'bg-red-600 text-white hover:bg-red-700'
+                              : 'bg-red-100 text-red-600 hover:bg-red-200'
+                          }`}
+                        >
+                          {deleteConfirm === entry.id ? '🗑️ Bestätigen' : '🗑️ Löschen'}
+                        </button>
+                      )}
                     </div>
                     <h3 className="text-xl font-semibold text-gray-800 mb-3">{entry.question}</h3>
                     
@@ -544,11 +660,11 @@ function App() {
                   onChange={(e) => setNewEntry({...newEntry, category: e.target.value})}
                 >
                   <option value="">Kategorie auswählen</option>
-                  <option value="IT-Support">💻 IT-Support</option>
-                  <option value="Produktion">🔧 Produktion</option>
-                  <option value="Qualitätskontrolle">🔍 Qualitätskontrolle</option>
-                  <option value="Verwaltung">📋 Verwaltung</option>
-                  <option value="Wartung">⚙️ Wartung</option>
+                  {categories.map(category => (
+                    <option key={category} value={category}>
+                      {getCategoryIcon(category)} {category}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="mb-6">
@@ -573,6 +689,91 @@ function App() {
                   type="submit"
                   disabled={loading}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Hinzufügen...' : 'Hinzufügen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal - nur für Admins */}
+      {showAddCategory && isAdmin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-semibold mb-4">🏷️ Neue Kategorie hinzufügen</h3>
+            <form onSubmit={handleAddCategory}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                <input
+                  required
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={newCategory.name}
+                  onChange={(e) => setNewCategory({...newCategory, name: e.target.value})}
+                  placeholder="z.B. Notfallprozeduren"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
+                <div className="flex gap-2 mb-2">
+                  {commonIcons.map(icon => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setNewCategory({...newCategory, icon})}
+                      className={`px-3 py-2 rounded-lg text-lg ${newCategory.icon === icon ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={newCategory.icon}
+                  onChange={(e) => setNewCategory({...newCategory, icon: e.target.value})}
+                  placeholder="oder eigenes Icon eingeben"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Farbe</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {predefinedColors.map(color => (
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => setNewCategory({...newCategory, color: color.value})}
+                      className={`px-3 py-2 rounded-lg text-sm ${color.value} ${newCategory.color === color.value ? 'ring-2 ring-blue-500' : ''}`}
+                    >
+                      {color.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Beschreibung (optional)</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="3"
+                  value={newCategory.description}
+                  onChange={(e) => setNewCategory({...newCategory, description: e.target.value})}
+                  placeholder="Kurze Beschreibung der Kategorie..."
+                />
+              </div>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategory(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
                 >
                   {loading ? 'Hinzufügen...' : 'Hinzufügen'}
                 </button>

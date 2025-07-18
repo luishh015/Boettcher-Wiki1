@@ -27,6 +27,7 @@ MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
 client = MongoClient(MONGO_URL)
 db = client.boettcher_wiki
 knowledge_base = db.knowledge_base
+categories_collection = db.categories
 
 # JWT Configuration
 SECRET_KEY = "boettcher-wiki-secret-key-2024"
@@ -52,6 +53,14 @@ class KnowledgeEntry(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+class Category(BaseModel):
+    id: Optional[str] = None
+    name: str
+    icon: str
+    color: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
 class SearchQuery(BaseModel):
     query: str
     category: Optional[str] = None
@@ -64,6 +73,10 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     username: str
+
+class DeleteResponse(BaseModel):
+    message: str
+    deleted_id: str
 
 # Authentication functions
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -172,11 +185,71 @@ async def search_knowledge(search_query: SearchQuery):
     
     return result
 
+@app.post("/api/categories", response_model=Category)
+async def create_category(category: Category, current_user: str = Depends(verify_token)):
+    """Neue Kategorie hinzufügen - nur für Admins"""
+    # Check if category already exists
+    existing_category = categories_collection.find_one({"name": category.name})
+    if existing_category:
+        raise HTTPException(status_code=400, detail="Kategorie existiert bereits")
+    
+    category.id = str(uuid.uuid4())
+    category.created_at = datetime.utcnow()
+    
+    # Insert into database
+    categories_collection.insert_one(category.dict())
+    return category
+
 @app.get("/api/categories")
 async def get_categories():
     """Verfügbare Kategorien abrufen - öffentlich"""
-    categories = knowledge_base.distinct("category")
-    return {"categories": categories}
+    # Get categories from knowledge base entries
+    knowledge_categories = knowledge_base.distinct("category")
+    
+    # Get custom categories from categories collection
+    custom_categories = list(categories_collection.find({}))
+    
+    # Combine and deduplicate
+    all_categories = set(knowledge_categories)
+    
+    # Add custom categories
+    for cat in custom_categories:
+        all_categories.add(cat["name"])
+    
+    return {"categories": list(all_categories)}
+
+@app.get("/api/categories/detailed", response_model=List[Category])
+async def get_detailed_categories(current_user: str = Depends(verify_token)):
+    """Detaillierte Kategorien für Admin-Interface"""
+    categories = list(categories_collection.find({}))
+    result = []
+    
+    for cat in categories:
+        cat["_id"] = str(cat["_id"])
+        result.append(Category(**cat))
+    
+    return result
+
+@app.delete("/api/categories/{category_id}", response_model=DeleteResponse)
+async def delete_category(category_id: str, current_user: str = Depends(verify_token)):
+    """Kategorie löschen - nur für Admins"""
+    category = categories_collection.find_one({"id": category_id})
+    if not category:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    
+    # Check if category is used in knowledge entries
+    entries_using_category = knowledge_base.count_documents({"category": category["name"]})
+    if entries_using_category > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Kategorie kann nicht gelöscht werden. {entries_using_category} Einträge verwenden diese Kategorie."
+        )
+    
+    result = categories_collection.delete_one({"id": category_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    
+    return DeleteResponse(message="Kategorie erfolgreich gelöscht", deleted_id=category_id)
 
 @app.get("/api/stats")
 async def get_stats():
@@ -204,14 +277,18 @@ async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry, current_u
     knowledge_base.replace_one({"id": entry_id}, entry.dict())
     return entry
 
-@app.delete("/api/knowledge/{entry_id}")
+@app.delete("/api/knowledge/{entry_id}", response_model=DeleteResponse)
 async def delete_knowledge_entry(entry_id: str, current_user: str = Depends(verify_token)):
     """Wissenseintrag löschen - nur für Admins"""
+    entry = knowledge_base.find_one({"id": entry_id})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    
     result = knowledge_base.delete_one({"id": entry_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
     
-    return {"message": "Eintrag erfolgreich gelöscht"}
+    return DeleteResponse(message="Eintrag erfolgreich gelöscht", deleted_id=entry_id)
 
 # Initialize with sample data if database is empty
 @app.on_event("startup")
@@ -268,6 +345,30 @@ async def initialize_sample_data():
         
         knowledge_base.insert_many(sample_entries)
         print("Beispieldaten zur Wissensdatenbank hinzugefügt")
+    
+    # Initialize default categories if none exist
+    if categories_collection.count_documents({}) == 0:
+        default_categories = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Sicherheit",
+                "icon": "🛡️",
+                "color": "bg-red-100 text-red-800 border-red-500",
+                "description": "Sicherheitsrichtlinien und -verfahren",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Schulung",
+                "icon": "🎓",
+                "color": "bg-indigo-100 text-indigo-800 border-indigo-500",
+                "description": "Schulungsmaterialien und -prozesse",
+                "created_at": datetime.utcnow()
+            }
+        ]
+        
+        categories_collection.insert_many(default_categories)
+        print("Standard-Kategorien hinzugefügt")
 
 if __name__ == "__main__":
     import uvicorn
