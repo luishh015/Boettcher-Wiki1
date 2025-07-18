@@ -278,7 +278,7 @@ class BöttcherWikiTester:
             fake_id = str(uuid.uuid4())
             response = requests.post(
                 f"{self.base_url}/questions/{fake_id}/answer",
-                json={"answer_text": "Test answer", "author": "Test Author"},
+                json={"question_id": fake_id, "answer_text": "Test answer", "author": "Test Author"},
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
