@@ -299,7 +299,7 @@ class BöttcherWikiTester:
                 question_id = self.created_question_ids[0]
                 response = requests.post(
                     f"{self.base_url}/questions/{question_id}/answer",
-                    json={"answer_text": "Duplicate answer", "author": "Test Author"},
+                    json={"question_id": question_id, "answer_text": "Duplicate answer", "author": "Test Author"},
                     headers={"Content-Type": "application/json"},
                     timeout=10
                 )
