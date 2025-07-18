@@ -249,6 +249,90 @@ backend:
         agent: "testing"
         comment: "✅ Edge cases handled correctly. Non-existent entry operations return proper 404 errors, empty search queries handled gracefully, special characters in German text processed correctly. All error responses follow proper HTTP status codes."
 
+  - task: "File Upload API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/upload endpoint working correctly with authentication. Successfully uploads files with proper validation, generates UUIDs, and returns complete file metadata including base64 encoded data and timestamps."
+
+  - task: "File Download API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ GET /api/files/{file_id}/download endpoint working correctly. Downloads files with proper headers (Content-Disposition, Content-Type) and streams file content correctly. Handles non-existent files with proper 404 errors."
+
+  - task: "File Validation System"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ File validation working correctly. Rejects files >10MB with 413 status, rejects unsupported file types with 400 status. Supports images (jpg, jpeg, png, gif, bmp, webp), documents (pdf, doc, docx, txt, rtf), spreadsheets (xls, xlsx, csv), presentations (ppt, pptx), and archives (zip, rar, 7z)."
+
+  - task: "Thumbnail Generation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Thumbnail generation working correctly for image files. Creates 200x200 thumbnails in JPEG format, handles different image formats (PNG, JPEG), converts RGBA/LA/P modes to RGB, and stores as base64 encoded strings."
+
+  - task: "Knowledge Entry Attachments"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Knowledge entries with attachments working perfectly. POST /api/knowledge accepts attachments array, GET /api/knowledge returns entries with complete attachment metadata, attachment structure includes all required fields (id, filename, file_type, file_size, content_type, file_data, thumbnail, uploaded_at)."
+
+  - task: "File Upload Authentication"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ File upload authentication working correctly. Requires valid JWT token for uploads, rejects unauthorized requests with 403 status (functionally correct). Admin login system working with proper token generation and validation."
+
+  - task: "Statistics with Attachments"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Statistics API updated to include total_attachments count. GET /api/stats returns accurate count of attachments across all knowledge entries, properly counts attachments in nested arrays, updates dynamically when entries with attachments are created."
+
 frontend:
   - task: "Frontend Testing"
     implemented: false
