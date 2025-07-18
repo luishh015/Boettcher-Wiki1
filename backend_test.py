@@ -148,6 +148,8 @@ class BöttcherWikiTester:
         for i, answer_data in enumerate(test_answers[:len(self.created_question_ids)]):
             try:
                 question_id = self.created_question_ids[i]
+                # Set the question_id in the answer data to match API requirement
+                answer_data["question_id"] = question_id
                 response = requests.post(
                     f"{self.base_url}/questions/{question_id}/answer",
                     json=answer_data,
