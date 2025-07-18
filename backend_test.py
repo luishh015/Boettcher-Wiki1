@@ -133,10 +133,12 @@ class BöttcherWikiTester:
             
         test_answers = [
             {
+                "question_id": "",  # Will be set dynamically
                 "answer_text": "Quantenmechanik beschreibt das Verhalten von Teilchen auf subatomarer Ebene durch Wahrscheinlichkeiten und Wellenfunktionen.",
                 "author": "Dr. Einstein"
             },
             {
+                "question_id": "",  # Will be set dynamically
                 "answer_text": "Die besten ML-Methoden hängen vom Problem ab: Supervised Learning für klassifizierte Daten, Unsupervised für Muster, Deep Learning für komplexe Daten.",
                 "author": "Prof. Turing"
             }
