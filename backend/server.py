@@ -23,30 +23,17 @@ app.add_middleware(
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
 client = MongoClient(MONGO_URL)
 db = client.boettcher_wiki
-questions_collection = db.questions
-answers_collection = db.answers
+knowledge_base = db.knowledge_base
 
 # Pydantic models
-class Question(BaseModel):
+class KnowledgeEntry(BaseModel):
     id: Optional[str] = None
-    question_text: str
+    question: str
+    answer: str
     category: str
-    author: str
-    created_at: Optional[datetime] = None
     tags: List[str] = []
-    answered: bool = False
-
-class Answer(BaseModel):
-    id: Optional[str] = None
-    question_id: str
-    answer_text: str
-    author: str
     created_at: Optional[datetime] = None
-    helpful_count: int = 0
-
-class QuestionAnswer(BaseModel):
-    question: Question
-    answer: Optional[Answer] = None
+    updated_at: Optional[datetime] = None
 
 class SearchQuery(BaseModel):
     query: str
@@ -57,81 +44,44 @@ class SearchQuery(BaseModel):
 async def health_check():
     return {"status": "healthy", "service": "Böttcher Wiki API"}
 
-@app.post("/api/questions", response_model=Question)
-async def create_question(question: Question):
-    """Neue Frage hinzufügen"""
-    question.id = str(uuid.uuid4())
-    question.created_at = datetime.utcnow()
-    question.answered = False
+@app.post("/api/knowledge", response_model=KnowledgeEntry)
+async def create_knowledge_entry(entry: KnowledgeEntry):
+    """Neue Frage/Antwort hinzufügen"""
+    entry.id = str(uuid.uuid4())
+    entry.created_at = datetime.utcnow()
+    entry.updated_at = datetime.utcnow()
     
     # Insert into database
-    questions_collection.insert_one(question.dict())
-    return question
+    knowledge_base.insert_one(entry.dict())
+    return entry
 
-@app.get("/api/questions", response_model=List[QuestionAnswer])
-async def get_all_questions(category: Optional[str] = None, limit: int = 50):
-    """Alle Fragen mit Antworten abrufen"""
+@app.get("/api/knowledge", response_model=List[KnowledgeEntry])
+async def get_all_knowledge(category: Optional[str] = None, limit: int = 100):
+    """Alle Wissenseinträge abrufen"""
     query = {}
     if category:
         query["category"] = category
     
-    questions = list(questions_collection.find(query).sort("created_at", -1).limit(limit))
+    entries = list(knowledge_base.find(query).sort("created_at", -1).limit(limit))
     result = []
     
-    for q in questions:
-        q["_id"] = str(q["_id"])
-        question_obj = Question(**q)
-        
-        # Get answer if exists
-        answer_doc = answers_collection.find_one({"question_id": q["id"]})
-        answer_obj = None
-        if answer_doc:
-            answer_doc["_id"] = str(answer_doc["_id"])
-            answer_obj = Answer(**answer_doc)
-        
-        result.append(QuestionAnswer(question=question_obj, answer=answer_obj))
+    for entry in entries:
+        entry["_id"] = str(entry["_id"])
+        result.append(KnowledgeEntry(**entry))
     
     return result
 
-@app.post("/api/questions/{question_id}/answer", response_model=Answer)
-async def create_answer(question_id: str, answer: Answer):
-    """Antwort zu einer Frage hinzufügen"""
-    # Check if question exists
-    question = questions_collection.find_one({"id": question_id})
-    if not question:
-        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
-    
-    # Check if answer already exists
-    existing_answer = answers_collection.find_one({"question_id": question_id})
-    if existing_answer:
-        raise HTTPException(status_code=400, detail="Antwort bereits vorhanden")
-    
-    answer.id = str(uuid.uuid4())
-    answer.question_id = question_id
-    answer.created_at = datetime.utcnow()
-    answer.helpful_count = 0
-    
-    # Insert answer
-    answers_collection.insert_one(answer.dict())
-    
-    # Update question as answered
-    questions_collection.update_one(
-        {"id": question_id},
-        {"$set": {"answered": True}}
-    )
-    
-    return answer
-
-@app.post("/api/search", response_model=List[QuestionAnswer])
-async def search_questions(search_query: SearchQuery):
-    """Fragen durchsuchen"""
+@app.post("/api/search", response_model=List[KnowledgeEntry])
+async def search_knowledge(search_query: SearchQuery):
+    """Wissensdatenbank durchsuchen"""
     query = {}
     
-    # Text search in question text and tags
+    # Text search in question, answer and tags
     if search_query.query:
         search_pattern = re.compile(search_query.query, re.IGNORECASE)
         query["$or"] = [
-            {"question_text": {"$regex": search_pattern}},
+            {"question": {"$regex": search_pattern}},
+            {"answer": {"$regex": search_pattern}},
             {"tags": {"$regex": search_pattern}}
         ]
     
@@ -139,54 +89,111 @@ async def search_questions(search_query: SearchQuery):
     if search_query.category:
         query["category"] = search_query.category
     
-    questions = list(questions_collection.find(query).sort("created_at", -1))
+    entries = list(knowledge_base.find(query).sort("created_at", -1))
     result = []
     
-    for q in questions:
-        q["_id"] = str(q["_id"])
-        question_obj = Question(**q)
-        
-        # Get answer if exists
-        answer_doc = answers_collection.find_one({"question_id": q["id"]})
-        answer_obj = None
-        if answer_doc:
-            answer_doc["_id"] = str(answer_doc["_id"])
-            answer_obj = Answer(**answer_doc)
-        
-        result.append(QuestionAnswer(question=question_obj, answer=answer_obj))
+    for entry in entries:
+        entry["_id"] = str(entry["_id"])
+        result.append(KnowledgeEntry(**entry))
     
     return result
 
 @app.get("/api/categories")
 async def get_categories():
     """Verfügbare Kategorien abrufen"""
-    categories = questions_collection.distinct("category")
+    categories = knowledge_base.distinct("category")
     return {"categories": categories}
 
 @app.get("/api/stats")
 async def get_stats():
     """Statistiken abrufen"""
-    total_questions = questions_collection.count_documents({})
-    answered_questions = questions_collection.count_documents({"answered": True})
-    unanswered_questions = total_questions - answered_questions
+    total_entries = knowledge_base.count_documents({})
+    categories_count = len(knowledge_base.distinct("category"))
     
     return {
-        "total_questions": total_questions,
-        "answered_questions": answered_questions,
-        "unanswered_questions": unanswered_questions
+        "total_entries": total_entries,
+        "categories_count": categories_count
     }
 
-@app.delete("/api/questions/{question_id}")
-async def delete_question(question_id: str):
-    """Frage löschen"""
-    result = questions_collection.delete_one({"id": question_id})
+@app.put("/api/knowledge/{entry_id}", response_model=KnowledgeEntry)
+async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry):
+    """Wissenseintrag aktualisieren"""
+    # Check if entry exists
+    existing_entry = knowledge_base.find_one({"id": entry_id})
+    if not existing_entry:
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    
+    entry.id = entry_id
+    entry.updated_at = datetime.utcnow()
+    
+    # Update in database
+    knowledge_base.replace_one({"id": entry_id}, entry.dict())
+    return entry
+
+@app.delete("/api/knowledge/{entry_id}")
+async def delete_knowledge_entry(entry_id: str):
+    """Wissenseintrag löschen"""
+    result = knowledge_base.delete_one({"id": entry_id})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Frage nicht gefunden")
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
     
-    # Also delete associated answer
-    answers_collection.delete_one({"question_id": question_id})
-    
-    return {"message": "Frage erfolgreich gelöscht"}
+    return {"message": "Eintrag erfolgreich gelöscht"}
+
+# Initialize with sample data if database is empty
+@app.on_event("startup")
+async def initialize_sample_data():
+    """Beispieldaten hinzufügen falls Datenbank leer ist"""
+    if knowledge_base.count_documents({}) == 0:
+        sample_entries = [
+            {
+                "id": str(uuid.uuid4()),
+                "question": "Was tun wenn der Scanner nicht funktioniert?",
+                "answer": "1. Überprüfen Sie alle Kabelverbindungen\n2. Starten Sie den Scanner neu\n3. Prüfen Sie ob die Scanner-Software geöffnet ist\n4. Kontrollieren Sie die Stromversorgung\n5. Bei weiteren Problemen IT-Support kontaktieren",
+                "category": "IT-Support",
+                "tags": ["scanner", "hardware", "fehlerbehebung"],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "question": "Wie führe ich eine Qualitätsprüfung durch?",
+                "answer": "1. Prüfliste aus dem Ordner 'Qualitätskontrolle' nehmen\n2. Fahrrad visuell auf Kratzer und Dellen prüfen\n3. Alle Schraubverbindungen auf festen Sitz kontrollieren\n4. Bremsen testen (vorne und hinten)\n5. Schaltung durchschalten und justieren falls nötig\n6. Laufräder auf Rundlauf prüfen\n7. Prüfprotokoll ausfüllen und in Akte ablegen",
+                "category": "Qualitätskontrolle",
+                "tags": ["qualität", "prüfung", "fahrrad", "kontrolle"],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "question": "Wo finde ich die Bestellformulare?",
+                "answer": "Alle Bestellformulare befinden sich:\n1. Digital: Im Netzwerk unter 'N:\\Verwaltung\\Bestellungen'\n2. Physisch: Im blauen Ordner am Verwaltungsplatz\n3. Für Eilbestellungen: Rotes Formular direkt beim Geschäftsführer\n4. Online-Bestellsystem: https://bestellungen.boettcher-bikes.de\n\nWichtig: Bestellungen über 500€ müssen genehmigt werden!",
+                "category": "Verwaltung",
+                "tags": ["bestellung", "formular", "verwaltung", "prozess"],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "question": "Wie kalibriere ich die Schweißmaschine?",
+                "answer": "ACHTUNG: Nur geschultes Personal!\n\n1. Maschine ausschalten und abkühlen lassen\n2. Kalibrierungshandbuch aus dem Maschinenordner holen\n3. Testmaterial (Stahlproben) bereitlegen\n4. Schweißparameter auf Standardwerte setzen:\n   - Spannung: 24V\n   - Stromstärke: 120A\n   - Geschwindigkeit: 15cm/min\n5. Testschweißung durchführen\n6. Naht begutachten und bei Bedarf nachjustieren\n7. Kalibrierung in Wartungsprotokoll eintragen",
+                "category": "Produktion",
+                "tags": ["schweißen", "kalibrierung", "maschine", "produktion"],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "question": "Wartungsintervalle für Maschinen",
+                "answer": "Tägliche Wartung:\n- Maschinen reinigen\n- Öl-/Schmierstoffstand prüfen\n- Sichtprüfung auf Verschleiß\n\nWöchentliche Wartung:\n- Schmierung aller beweglichen Teile\n- Spänebehälter leeren\n- Kühlflüssigkeit prüfen\n\nMonatliche Wartung:\n- Vollständige Inspektion\n- Verschleißteile prüfen\n- Wartungsprotokoll führen\n- Bei Bedarf Fachfirma beauftragen\n\nWartungsplan hängt an jeder Maschine aus!",
+                "category": "Wartung",
+                "tags": ["wartung", "maschine", "intervall", "pflege"],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+        ]
+        
+        knowledge_base.insert_many(sample_entries)
+        print("Beispieldaten zur Wissensdatenbank hinzugefügt")
 
 if __name__ == "__main__":
     import uvicorn
