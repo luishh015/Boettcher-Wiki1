@@ -10,10 +10,13 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [stats, setStats] = useState({});
   const [showAddEntry, setShowAddEntry] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedEntryId, setExpandedEntryId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUser, setAdminUser] = useState('');
 
-  // Form state
+  // Form states
   const [newEntry, setNewEntry] = useState({
     question: '',
     answer: '',
@@ -21,11 +24,41 @@ function App() {
     tags: []
   });
 
+  const [loginData, setLoginData] = useState({
+    username: '',
+    password: ''
+  });
+
   useEffect(() => {
     fetchKnowledgeEntries();
     fetchCategories();
     fetchStats();
+    checkAdminStatus();
   }, []);
+
+  const checkAdminStatus = async () => {
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/admin/verify`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setIsAdmin(true);
+          setAdminUser(data.username);
+        } else {
+          localStorage.removeItem('admin_token');
+        }
+      } catch (error) {
+        console.error('Error verifying admin status:', error);
+        localStorage.removeItem('admin_token');
+      }
+    }
+  };
 
   const fetchKnowledgeEntries = async () => {
     try {
@@ -55,6 +88,43 @@ function App() {
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(loginData)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('admin_token', data.access_token);
+        setIsAdmin(true);
+        setAdminUser(data.username);
+        setShowLogin(false);
+        setLoginData({ username: '', password: '' });
+      } else {
+        alert('Ungültige Anmeldedaten');
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
+      alert('Anmeldung fehlgeschlagen');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    setIsAdmin(false);
+    setAdminUser('');
   };
 
   const handleSearch = async () => {
@@ -109,12 +179,14 @@ function App() {
     setLoading(true);
     
     try {
+      const token = localStorage.getItem('admin_token');
       const tagsArray = newEntry.tags.length > 0 ? newEntry.tags.split(',').map(tag => tag.trim()) : [];
       
       const response = await fetch(`${BACKEND_URL}/api/knowledge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...newEntry,
@@ -128,9 +200,12 @@ function App() {
         fetchKnowledgeEntries();
         fetchCategories();
         fetchStats();
+      } else {
+        alert('Fehler beim Hinzufügen des Eintrags');
       }
     } catch (error) {
       console.error('Error adding entry:', error);
+      alert('Fehler beim Hinzufügen des Eintrags');
     } finally {
       setLoading(false);
     }
@@ -181,9 +256,9 @@ function App() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="bg-blue-600 text-white p-3 rounded-full">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-full">
                 <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                 </svg>
               </div>
               <div>
@@ -191,12 +266,34 @@ function App() {
                 <p className="text-blue-600 font-medium">Fahrradmanufaktur Wissensdatenbank</p>
               </div>
             </div>
-            <div className="hidden md:block">
-              <img 
-                src="https://images.unsplash.com/photo-1570169043013-de63774bbf97?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwyfHxiaWN5Y2xlJTIwbWFudWZhY3R1cmluZ3xlbnwwfHx8Ymx1ZXwxNzUyODU0NjczfDA&ixlib=rb-4.1.0&q=85" 
-                alt="Böttcher Bikes" 
-                className="w-32 h-20 object-cover rounded-lg shadow-md"
-              />
+            <div className="flex items-center space-x-4">
+              <div className="hidden md:block">
+                <img 
+                  src="https://images.unsplash.com/photo-1606857521015-7f9fcf423740?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBvZmZpY2V8ZW58MHx8fHwxNzUyODU2MTI2fDA&ixlib=rb-4.1.0&q=85" 
+                  alt="Professional Office" 
+                  className="w-32 h-20 object-cover rounded-lg shadow-md"
+                />
+              </div>
+              {isAdmin ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm font-medium text-gray-700">
+                    👨‍💼 {adminUser}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    Abmelden
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLogin(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  🔐 Admin Login
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -207,9 +304,9 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="bg-white rounded-lg p-6 shadow-md border-l-4 border-blue-500">
             <div className="flex items-center">
-              <div className="bg-blue-500 text-white p-3 rounded-full mr-4">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 rounded-full mr-4">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
                 </svg>
               </div>
               <div>
@@ -220,9 +317,9 @@ function App() {
           </div>
           <div className="bg-white rounded-lg p-6 shadow-md border-l-4 border-green-500">
             <div className="flex items-center">
-              <div className="bg-green-500 text-white p-3 rounded-full mr-4">
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-3 rounded-full mr-4">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M19 11H5l5-5-1.5-1.5L2 11l6.5 6.5L10 16l-5-5h14v-0z"/>
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                 </svg>
               </div>
               <div>
@@ -275,7 +372,7 @@ function App() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <svg className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
               </svg>
             </div>
             <button
@@ -288,15 +385,17 @@ function App() {
           </div>
         </div>
 
-        {/* Admin Add Entry Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => setShowAddEntry(true)}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md"
-          >
-            ➕ Neue Frage/Antwort hinzufügen
-          </button>
-        </div>
+        {/* Admin Add Entry Button - nur für eingeloggte Admins */}
+        {isAdmin && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowAddEntry(true)}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all transform hover:scale-105 shadow-md"
+            >
+              ➕ Neue Frage/Antwort hinzufügen
+            </button>
+          </div>
+        )}
 
         {/* Knowledge Entries */}
         <div className="space-y-4">
@@ -304,7 +403,7 @@ function App() {
             <div className="bg-white rounded-lg shadow-md p-8 text-center">
               <div className="text-gray-500">
                 <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
                 </svg>
                 <p className="text-lg font-medium mb-2">Keine Einträge gefunden</p>
                 <p className="text-gray-400">Versuchen Sie andere Suchbegriffe oder wählen Sie eine andere Kategorie.</p>
@@ -361,8 +460,55 @@ function App() {
         </div>
       </div>
 
-      {/* Add Entry Modal */}
-      {showAddEntry && (
+      {/* Login Modal */}
+      {showLogin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-semibold mb-4">🔐 Admin-Anmeldung</h3>
+            <form onSubmit={handleLogin}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Benutzername</label>
+                <input
+                  required
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={loginData.username}
+                  onChange={(e) => setLoginData({...loginData, username: e.target.value})}
+                />
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Passwort</label>
+                <input
+                  required
+                  type="password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={loginData.password}
+                  onChange={(e) => setLoginData({...loginData, password: e.target.value})}
+                />
+              </div>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLogin(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Anmelden...' : 'Anmelden'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Entry Modal - nur für Admins */}
+      {showAddEntry && isAdmin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-semibold mb-4">Neue Frage/Antwort hinzufügen</h3>

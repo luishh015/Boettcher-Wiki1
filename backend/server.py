@@ -1,12 +1,15 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from pymongo import MongoClient
 import uuid
 import re
+import hashlib
+import jwt
 
 app = FastAPI(title="Böttcher Wiki API", version="1.0.0")
 
@@ -25,6 +28,20 @@ client = MongoClient(MONGO_URL)
 db = client.boettcher_wiki
 knowledge_base = db.knowledge_base
 
+# JWT Configuration
+SECRET_KEY = "boettcher-wiki-secret-key-2024"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
+
+# Security
+security = HTTPBearer()
+
+# Admin credentials (in production, use environment variables)
+ADMIN_CREDENTIALS = {
+    "admin": "boettcher2024",
+    "manager": "wiki2024"
+}
+
 # Pydantic models
 class KnowledgeEntry(BaseModel):
     id: Optional[str] = None
@@ -39,14 +56,71 @@ class SearchQuery(BaseModel):
     query: str
     category: Optional[str] = None
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
+# Authentication functions
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return username
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
 # API Routes
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy", "service": "Böttcher Wiki API"}
 
+@app.post("/api/admin/login", response_model=LoginResponse)
+async def admin_login(login_request: LoginRequest):
+    """Admin-Anmeldung"""
+    username = login_request.username
+    password = login_request.password
+    
+    # Verify credentials
+    if username not in ADMIN_CREDENTIALS or ADMIN_CREDENTIALS[username] != password:
+        raise HTTPException(
+            status_code=401,
+            detail="Ungültige Anmeldedaten"
+        )
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": username})
+    
+    return LoginResponse(
+        access_token=access_token,
+        username=username
+    )
+
+@app.get("/api/admin/verify")
+async def verify_admin(current_user: str = Depends(verify_token)):
+    """Token verifizieren"""
+    return {"valid": True, "username": current_user}
+
 @app.post("/api/knowledge", response_model=KnowledgeEntry)
-async def create_knowledge_entry(entry: KnowledgeEntry):
-    """Neue Frage/Antwort hinzufügen"""
+async def create_knowledge_entry(entry: KnowledgeEntry, current_user: str = Depends(verify_token)):
+    """Neue Frage/Antwort hinzufügen - nur für Admins"""
     entry.id = str(uuid.uuid4())
     entry.created_at = datetime.utcnow()
     entry.updated_at = datetime.utcnow()
@@ -57,7 +131,7 @@ async def create_knowledge_entry(entry: KnowledgeEntry):
 
 @app.get("/api/knowledge", response_model=List[KnowledgeEntry])
 async def get_all_knowledge(category: Optional[str] = None, limit: int = 100):
-    """Alle Wissenseinträge abrufen"""
+    """Alle Wissenseinträge abrufen - öffentlich"""
     query = {}
     if category:
         query["category"] = category
@@ -73,7 +147,7 @@ async def get_all_knowledge(category: Optional[str] = None, limit: int = 100):
 
 @app.post("/api/search", response_model=List[KnowledgeEntry])
 async def search_knowledge(search_query: SearchQuery):
-    """Wissensdatenbank durchsuchen"""
+    """Wissensdatenbank durchsuchen - öffentlich"""
     query = {}
     
     # Text search in question, answer and tags
@@ -100,13 +174,13 @@ async def search_knowledge(search_query: SearchQuery):
 
 @app.get("/api/categories")
 async def get_categories():
-    """Verfügbare Kategorien abrufen"""
+    """Verfügbare Kategorien abrufen - öffentlich"""
     categories = knowledge_base.distinct("category")
     return {"categories": categories}
 
 @app.get("/api/stats")
 async def get_stats():
-    """Statistiken abrufen"""
+    """Statistiken abrufen - öffentlich"""
     total_entries = knowledge_base.count_documents({})
     categories_count = len(knowledge_base.distinct("category"))
     
@@ -116,8 +190,8 @@ async def get_stats():
     }
 
 @app.put("/api/knowledge/{entry_id}", response_model=KnowledgeEntry)
-async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry):
-    """Wissenseintrag aktualisieren"""
+async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry, current_user: str = Depends(verify_token)):
+    """Wissenseintrag aktualisieren - nur für Admins"""
     # Check if entry exists
     existing_entry = knowledge_base.find_one({"id": entry_id})
     if not existing_entry:
@@ -131,8 +205,8 @@ async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry):
     return entry
 
 @app.delete("/api/knowledge/{entry_id}")
-async def delete_knowledge_entry(entry_id: str):
-    """Wissenseintrag löschen"""
+async def delete_knowledge_entry(entry_id: str, current_user: str = Depends(verify_token)):
+    """Wissenseintrag löschen - nur für Admins"""
     result = knowledge_base.delete_one({"id": entry_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
