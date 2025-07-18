@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend API Tests for Böttcher Wiki
-Tests all core Q&A functions, data flow, edge cases, and database integration
+Comprehensive Backend API Tests for Böttcher Wiki Knowledge Base System
+Tests all knowledge base functions, search, categories, stats, CRUD operations, and database integration
 """
 
 import requests
@@ -13,11 +13,11 @@ import time
 # Get backend URL from environment
 BACKEND_URL = "https://5f463c4f-105f-4102-90ec-a413bdeb91a6.preview.emergentagent.com/api"
 
-class BöttcherWikiTester:
+class BöttcherWikiKnowledgeBaseTester:
     def __init__(self):
         self.base_url = BACKEND_URL
         self.test_results = []
-        self.created_question_ids = []
+        self.created_entry_ids = []
         
     def log_test(self, test_name, success, message="", response_data=None):
         """Log test results"""
@@ -36,7 +36,7 @@ class BöttcherWikiTester:
             response = requests.get(f"{self.base_url}/health", timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                if data.get("status") == "healthy":
+                if data.get("status") == "healthy" and "Böttcher Wiki" in data.get("service", ""):
                     self.log_test("Health Check", True, "API is healthy")
                     return True
                 else:
@@ -47,137 +47,151 @@ class BöttcherWikiTester:
             self.log_test("Health Check", False, f"Connection error: {str(e)}")
         return False
         
-    def test_create_question(self):
-        """Test POST /api/questions - Create new questions"""
-        test_questions = [
+    def test_sample_data_verification(self):
+        """Test that sample data was initialized correctly"""
+        try:
+            response = requests.get(f"{self.base_url}/knowledge", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) >= 5:
+                    # Check for expected categories
+                    categories = [entry.get("category") for entry in data]
+                    expected_categories = ["IT-Support", "Qualitätskontrolle", "Verwaltung", "Produktion", "Wartung"]
+                    found_categories = [cat for cat in expected_categories if cat in categories]
+                    
+                    if len(found_categories) >= 4:  # At least 4 of 5 expected categories
+                        # Check structure of entries
+                        first_entry = data[0]
+                        required_fields = ["id", "question", "answer", "category", "tags"]
+                        if all(field in first_entry for field in required_fields):
+                            self.log_test("Sample Data Verification", True, f"Found {len(data)} entries with {len(found_categories)} expected categories")
+                            return True
+                        else:
+                            self.log_test("Sample Data Verification", False, f"Missing required fields in entry: {first_entry}")
+                    else:
+                        self.log_test("Sample Data Verification", False, f"Missing expected categories. Found: {found_categories}")
+                else:
+                    self.log_test("Sample Data Verification", False, f"Expected at least 5 sample entries, got {len(data) if isinstance(data, list) else 'non-list'}")
+            else:
+                self.log_test("Sample Data Verification", False, f"Status code: {response.status_code}")
+                
+        except Exception as e:
+            self.log_test("Sample Data Verification", False, f"Error: {str(e)}")
+        return False
+        
+    def test_create_knowledge_entry(self):
+        """Test POST /api/knowledge - Create new knowledge entries"""
+        test_entries = [
             {
-                "question_text": "Wie funktioniert die Quantenmechanik in der Praxis?",
-                "category": "Physik",
-                "author": "Dr. Schmidt",
-                "tags": ["quantenmechanik", "physik", "wissenschaft"]
+                "question": "Wie installiere ich neue Software auf dem Arbeitsplatz-PC?",
+                "answer": "1. Admin-Rechte anfordern\n2. Software aus dem genehmigten Katalog wählen\n3. IT-Support kontaktieren für Installation\n4. Nach Installation testen und dokumentieren",
+                "category": "IT-Support",
+                "tags": ["software", "installation", "pc", "admin"]
             },
             {
-                "question_text": "Was sind die besten Methoden für maschinelles Lernen?",
-                "category": "Informatik", 
-                "author": "Prof. Müller",
-                "tags": ["ml", "ki", "algorithmus"]
+                "question": "Welche Sicherheitsausrüstung ist in der Produktion erforderlich?",
+                "answer": "Obligatorisch:\n- Sicherheitsschuhe\n- Schutzbrille\n- Arbeitshandschuhe\n- Gehörschutz bei lauten Maschinen\n- Helm in bestimmten Bereichen\n\nAlle Ausrüstung muss CE-zertifiziert sein.",
+                "category": "Produktion",
+                "tags": ["sicherheit", "ausrüstung", "schutz", "ce-zertifizierung"]
             },
             {
-                "question_text": "Wie bereitet man traditionelle deutsche Küche zu?",
-                "category": "Kochen",
-                "author": "Chef Weber",
-                "tags": ["kochen", "deutsch", "tradition"]
+                "question": "Wie erstelle ich einen Urlaubsantrag?",
+                "answer": "1. Formular aus dem Intranet herunterladen\n2. Gewünschte Daten eintragen\n3. Vorgesetzten um Genehmigung bitten\n4. Genehmigten Antrag an HR weiterleiten\n5. Bestätigung abwarten\n\nMindestens 2 Wochen Vorlauf einplanen!",
+                "category": "Verwaltung",
+                "tags": ["urlaub", "antrag", "formular", "genehmigung"]
             }
         ]
         
         success_count = 0
-        for i, question_data in enumerate(test_questions):
+        for i, entry_data in enumerate(test_entries):
             try:
                 response = requests.post(
-                    f"{self.base_url}/questions",
-                    json=question_data,
+                    f"{self.base_url}/knowledge",
+                    json=entry_data,
                     headers={"Content-Type": "application/json"},
                     timeout=10
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
-                    if data.get("id") and data.get("question_text") == question_data["question_text"]:
-                        self.created_question_ids.append(data["id"])
+                    if data.get("id") and data.get("question") == entry_data["question"]:
+                        self.created_entry_ids.append(data["id"])
                         success_count += 1
-                        self.log_test(f"Create Question {i+1}", True, f"Created question with ID: {data['id']}")
+                        self.log_test(f"Create Knowledge Entry {i+1}", True, f"Created entry with ID: {data['id']}")
                     else:
-                        self.log_test(f"Create Question {i+1}", False, f"Invalid response structure: {data}")
+                        self.log_test(f"Create Knowledge Entry {i+1}", False, f"Invalid response structure: {data}")
                 else:
-                    self.log_test(f"Create Question {i+1}", False, f"Status code: {response.status_code}, Response: {response.text}")
+                    self.log_test(f"Create Knowledge Entry {i+1}", False, f"Status code: {response.status_code}, Response: {response.text}")
                     
             except Exception as e:
-                self.log_test(f"Create Question {i+1}", False, f"Error: {str(e)}")
+                self.log_test(f"Create Knowledge Entry {i+1}", False, f"Error: {str(e)}")
                 
-        return success_count == len(test_questions)
+        return success_count == len(test_entries)
         
-    def test_get_all_questions(self):
-        """Test GET /api/questions - Retrieve all questions"""
+    def test_get_all_knowledge(self):
+        """Test GET /api/knowledge - Retrieve all knowledge entries"""
         try:
-            response = requests.get(f"{self.base_url}/questions", timeout=10)
+            response = requests.get(f"{self.base_url}/knowledge", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, list):
-                    question_count = len(data)
-                    # Verify structure of returned questions
-                    if question_count > 0:
-                        first_question = data[0]
-                        if "question" in first_question and "answer" in first_question:
-                            self.log_test("Get All Questions", True, f"Retrieved {question_count} questions with proper structure")
+                    entry_count = len(data)
+                    # Verify structure of returned entries
+                    if entry_count > 0:
+                        first_entry = data[0]
+                        required_fields = ["id", "question", "answer", "category", "tags"]
+                        if all(field in first_entry for field in required_fields):
+                            self.log_test("Get All Knowledge", True, f"Retrieved {entry_count} entries with proper structure")
                             return True
                         else:
-                            self.log_test("Get All Questions", False, f"Invalid question structure: {first_question}")
+                            self.log_test("Get All Knowledge", False, f"Invalid entry structure: {first_entry}")
                     else:
-                        self.log_test("Get All Questions", True, "Retrieved empty list (no questions yet)")
+                        self.log_test("Get All Knowledge", True, "Retrieved empty list (no entries yet)")
                         return True
                 else:
-                    self.log_test("Get All Questions", False, f"Expected list, got: {type(data)}")
+                    self.log_test("Get All Knowledge", False, f"Expected list, got: {type(data)}")
             else:
-                self.log_test("Get All Questions", False, f"Status code: {response.status_code}")
+                self.log_test("Get All Knowledge", False, f"Status code: {response.status_code}")
                 
         except Exception as e:
-            self.log_test("Get All Questions", False, f"Error: {str(e)}")
+            self.log_test("Get All Knowledge", False, f"Error: {str(e)}")
         return False
         
-    def test_add_answers(self):
-        """Test POST /api/questions/{id}/answer - Add answers to questions"""
-        if not self.created_question_ids:
-            self.log_test("Add Answers", False, "No questions available to answer")
-            return False
+    def test_category_filtering(self):
+        """Test GET /api/knowledge with category filter"""
+        try:
+            # Test filtering by IT-Support category
+            response = requests.get(f"{self.base_url}/knowledge?category=IT-Support", timeout=10)
             
-        test_answers = [
-            {
-                "question_id": "",  # Will be set dynamically
-                "answer_text": "Quantenmechanik beschreibt das Verhalten von Teilchen auf subatomarer Ebene durch Wahrscheinlichkeiten und Wellenfunktionen.",
-                "author": "Dr. Einstein"
-            },
-            {
-                "question_id": "",  # Will be set dynamically
-                "answer_text": "Die besten ML-Methoden hängen vom Problem ab: Supervised Learning für klassifizierte Daten, Unsupervised für Muster, Deep Learning für komplexe Daten.",
-                "author": "Prof. Turing"
-            }
-        ]
-        
-        success_count = 0
-        for i, answer_data in enumerate(test_answers[:len(self.created_question_ids)]):
-            try:
-                question_id = self.created_question_ids[i]
-                # Set the question_id in the answer data to match API requirement
-                answer_data["question_id"] = question_id
-                response = requests.post(
-                    f"{self.base_url}/questions/{question_id}/answer",
-                    json=answer_data,
-                    headers={"Content-Type": "application/json"},
-                    timeout=10
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("id") and data.get("question_id") == question_id:
-                        success_count += 1
-                        self.log_test(f"Add Answer {i+1}", True, f"Added answer to question {question_id}")
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    # All entries should be IT-Support category
+                    it_entries = [entry for entry in data if entry.get("category") == "IT-Support"]
+                    if len(it_entries) == len(data) and len(data) > 0:
+                        self.log_test("Category Filtering", True, f"Found {len(data)} IT-Support entries")
+                        return True
+                    elif len(data) == 0:
+                        self.log_test("Category Filtering", False, "No IT-Support entries found")
                     else:
-                        self.log_test(f"Add Answer {i+1}", False, f"Invalid response: {data}")
+                        self.log_test("Category Filtering", False, f"Filter not working properly: {len(it_entries)}/{len(data)} entries match")
                 else:
-                    self.log_test(f"Add Answer {i+1}", False, f"Status code: {response.status_code}, Response: {response.text}")
-                    
-            except Exception as e:
-                self.log_test(f"Add Answer {i+1}", False, f"Error: {str(e)}")
+                    self.log_test("Category Filtering", False, f"Expected list, got: {type(data)}")
+            else:
+                self.log_test("Category Filtering", False, f"Status code: {response.status_code}")
                 
-        return success_count > 0
+        except Exception as e:
+            self.log_test("Category Filtering", False, f"Error: {str(e)}")
+        return False
         
     def test_search_functionality(self):
-        """Test POST /api/search - Search questions by text and category"""
+        """Test POST /api/search - Search entries by text and category"""
         search_tests = [
-            {"query": "Quantenmechanik", "category": None, "expected_min": 1},
-            {"query": "", "category": "Physik", "expected_min": 1},
-            {"query": "maschinelles", "category": "Informatik", "expected_min": 1},
+            {"query": "Scanner", "category": None, "expected_min": 1},
+            {"query": "", "category": "IT-Support", "expected_min": 1},
+            {"query": "Qualität", "category": "Qualitätskontrolle", "expected_min": 1},
             {"query": "nonexistent", "category": None, "expected_min": 0}
         ]
         
@@ -223,10 +237,10 @@ class BöttcherWikiTester:
                 data = response.json()
                 if "categories" in data and isinstance(data["categories"], list):
                     categories = data["categories"]
-                    expected_categories = ["Physik", "Informatik", "Kochen"]
+                    expected_categories = ["IT-Support", "Qualitätskontrolle", "Verwaltung", "Produktion", "Wartung"]
                     found_categories = [cat for cat in expected_categories if cat in categories]
                     
-                    if len(found_categories) >= 2:  # At least 2 of our test categories
+                    if len(found_categories) >= 4:  # At least 4 of our expected categories
                         self.log_test("Get Categories", True, f"Found categories: {categories}")
                         return True
                     else:
@@ -247,19 +261,18 @@ class BöttcherWikiTester:
             
             if response.status_code == 200:
                 data = response.json()
-                required_fields = ["total_questions", "answered_questions", "unanswered_questions"]
+                required_fields = ["total_entries", "categories_count"]
                 
                 if all(field in data for field in required_fields):
-                    total = data["total_questions"]
-                    answered = data["answered_questions"]
-                    unanswered = data["unanswered_questions"]
+                    total = data["total_entries"]
+                    categories_count = data["categories_count"]
                     
-                    # Verify math
-                    if total == answered + unanswered and total >= len(self.created_question_ids):
-                        self.log_test("Get Stats", True, f"Stats: {total} total, {answered} answered, {unanswered} unanswered")
+                    # Verify reasonable values
+                    if total >= len(self.created_entry_ids) and categories_count >= 3:
+                        self.log_test("Get Stats", True, f"Stats: {total} total entries, {categories_count} categories")
                         return True
                     else:
-                        self.log_test("Get Stats", False, f"Stats math doesn't add up: {data}")
+                        self.log_test("Get Stats", False, f"Stats seem incorrect: {data}")
                 else:
                     self.log_test("Get Stats", False, f"Missing required fields: {data}")
             else:
@@ -269,50 +282,107 @@ class BöttcherWikiTester:
             self.log_test("Get Stats", False, f"Error: {str(e)}")
         return False
         
+    def test_update_knowledge_entry(self):
+        """Test PUT /api/knowledge/{id} - Update existing entries"""
+        if not self.created_entry_ids:
+            self.log_test("Update Knowledge Entry", False, "No entries available to update")
+            return False
+            
+        # Update the first created entry
+        entry_id = self.created_entry_ids[0]
+        updated_entry = {
+            "question": "Wie installiere ich neue Software auf dem Arbeitsplatz-PC? (Aktualisiert)",
+            "answer": "AKTUALISIERT:\n1. Admin-Rechte anfordern\n2. Software aus dem genehmigten Katalog wählen\n3. IT-Support kontaktieren für Installation\n4. Nach Installation testen und dokumentieren\n5. Lizenz registrieren",
+            "category": "IT-Support",
+            "tags": ["software", "installation", "pc", "admin", "lizenz"]
+        }
+        
+        try:
+            response = requests.put(
+                f"{self.base_url}/knowledge/{entry_id}",
+                json=updated_entry,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("id") == entry_id and "Aktualisiert" in data.get("question", ""):
+                    self.log_test("Update Knowledge Entry", True, f"Successfully updated entry {entry_id}")
+                    return True
+                else:
+                    self.log_test("Update Knowledge Entry", False, f"Update not reflected: {data}")
+            else:
+                self.log_test("Update Knowledge Entry", False, f"Status code: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_test("Update Knowledge Entry", False, f"Error: {str(e)}")
+        return False
+        
+    def test_delete_knowledge_entry(self):
+        """Test DELETE /api/knowledge/{id} - Delete entries"""
+        if not self.created_entry_ids:
+            self.log_test("Delete Knowledge Entry", False, "No entries available to delete")
+            return False
+            
+        # Test deleting the last created entry
+        entry_id = self.created_entry_ids[-1]
+        try:
+            response = requests.delete(f"{self.base_url}/knowledge/{entry_id}", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data:
+                    self.log_test("Delete Knowledge Entry", True, f"Successfully deleted entry {entry_id}")
+                    self.created_entry_ids.remove(entry_id)
+                    return True
+                else:
+                    self.log_test("Delete Knowledge Entry", False, f"Invalid response: {data}")
+            else:
+                self.log_test("Delete Knowledge Entry", False, f"Status code: {response.status_code}")
+                
+        except Exception as e:
+            self.log_test("Delete Knowledge Entry", False, f"Error: {str(e)}")
+        return False
+        
     def test_edge_cases(self):
         """Test edge cases and error handling"""
         edge_case_results = []
         
-        # Test 1: Add answer to non-existent question
+        # Test 1: Update non-existent entry
         try:
             fake_id = str(uuid.uuid4())
-            response = requests.post(
-                f"{self.base_url}/questions/{fake_id}/answer",
-                json={"question_id": fake_id, "answer_text": "Test answer", "author": "Test Author"},
+            response = requests.put(
+                f"{self.base_url}/knowledge/{fake_id}",
+                json={"question": "Test", "answer": "Test", "category": "Test", "tags": []},
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
             
             if response.status_code == 404:
                 edge_case_results.append(True)
-                self.log_test("Edge Case - Non-existent Question", True, "Correctly returned 404")
+                self.log_test("Edge Case - Update Non-existent Entry", True, "Correctly returned 404")
             else:
                 edge_case_results.append(False)
-                self.log_test("Edge Case - Non-existent Question", False, f"Expected 404, got {response.status_code}")
+                self.log_test("Edge Case - Update Non-existent Entry", False, f"Expected 404, got {response.status_code}")
         except Exception as e:
             edge_case_results.append(False)
-            self.log_test("Edge Case - Non-existent Question", False, f"Error: {str(e)}")
+            self.log_test("Edge Case - Update Non-existent Entry", False, f"Error: {str(e)}")
             
-        # Test 2: Add duplicate answer
-        if self.created_question_ids:
-            try:
-                question_id = self.created_question_ids[0]
-                response = requests.post(
-                    f"{self.base_url}/questions/{question_id}/answer",
-                    json={"question_id": question_id, "answer_text": "Duplicate answer", "author": "Test Author"},
-                    headers={"Content-Type": "application/json"},
-                    timeout=10
-                )
-                
-                if response.status_code == 400:
-                    edge_case_results.append(True)
-                    self.log_test("Edge Case - Duplicate Answer", True, "Correctly prevented duplicate answer")
-                else:
-                    edge_case_results.append(False)
-                    self.log_test("Edge Case - Duplicate Answer", False, f"Expected 400, got {response.status_code}")
-            except Exception as e:
+        # Test 2: Delete non-existent entry
+        try:
+            fake_id = str(uuid.uuid4())
+            response = requests.delete(f"{self.base_url}/knowledge/{fake_id}", timeout=10)
+            
+            if response.status_code == 404:
+                edge_case_results.append(True)
+                self.log_test("Edge Case - Delete Non-existent Entry", True, "Correctly returned 404")
+            else:
                 edge_case_results.append(False)
-                self.log_test("Edge Case - Duplicate Answer", False, f"Error: {str(e)}")
+                self.log_test("Edge Case - Delete Non-existent Entry", False, f"Expected 404, got {response.status_code}")
+        except Exception as e:
+            edge_case_results.append(False)
+            self.log_test("Edge Case - Delete Non-existent Entry", False, f"Error: {str(e)}")
         
         # Test 3: Search with empty query
         try:
@@ -340,57 +410,31 @@ class BöttcherWikiTester:
             
         return sum(edge_case_results) >= 2  # At least 2 out of 3 edge cases should pass
         
-    def test_delete_question(self):
-        """Test DELETE /api/questions/{id} - Delete questions"""
-        if not self.created_question_ids:
-            self.log_test("Delete Question", False, "No questions available to delete")
-            return False
-            
-        # Test deleting the last created question
-        question_id = self.created_question_ids[-1]
-        try:
-            response = requests.delete(f"{self.base_url}/questions/{question_id}", timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "message" in data:
-                    self.log_test("Delete Question", True, f"Successfully deleted question {question_id}")
-                    self.created_question_ids.remove(question_id)
-                    return True
-                else:
-                    self.log_test("Delete Question", False, f"Invalid response: {data}")
-            else:
-                self.log_test("Delete Question", False, f"Status code: {response.status_code}")
-                
-        except Exception as e:
-            self.log_test("Delete Question", False, f"Error: {str(e)}")
-        return False
-        
     def test_data_persistence(self):
         """Test that data persists correctly in database"""
-        if not self.created_question_ids:
-            self.log_test("Data Persistence", False, "No questions to verify persistence")
+        if not self.created_entry_ids:
+            self.log_test("Data Persistence", False, "No entries to verify persistence")
             return False
             
-        # Wait a moment then retrieve questions again
+        # Wait a moment then retrieve entries again
         time.sleep(1)
         
         try:
-            response = requests.get(f"{self.base_url}/questions", timeout=10)
+            response = requests.get(f"{self.base_url}/knowledge", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
-                found_questions = []
+                found_entries = []
                 
-                for qa in data:
-                    if qa.get("question", {}).get("id") in self.created_question_ids:
-                        found_questions.append(qa["question"]["id"])
+                for entry in data:
+                    if entry.get("id") in self.created_entry_ids:
+                        found_entries.append(entry["id"])
                         
-                if len(found_questions) >= len(self.created_question_ids) - 1:  # Account for deleted question
-                    self.log_test("Data Persistence", True, f"Found {len(found_questions)} persisted questions")
+                if len(found_entries) >= len(self.created_entry_ids) - 1:  # Account for deleted entry
+                    self.log_test("Data Persistence", True, f"Found {len(found_entries)} persisted entries")
                     return True
                 else:
-                    self.log_test("Data Persistence", False, f"Expected {len(self.created_question_ids)} questions, found {len(found_questions)}")
+                    self.log_test("Data Persistence", False, f"Expected {len(self.created_entry_ids)} entries, found {len(found_entries)}")
             else:
                 self.log_test("Data Persistence", False, f"Status code: {response.status_code}")
                 
@@ -400,22 +444,24 @@ class BöttcherWikiTester:
         
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print("=" * 60)
-        print("🧪 BÖTTCHER WIKI BACKEND API TESTS")
-        print("=" * 60)
+        print("=" * 70)
+        print("🧪 BÖTTCHER WIKI KNOWLEDGE BASE BACKEND API TESTS")
+        print("=" * 70)
         print(f"Testing against: {self.base_url}")
         print()
         
         test_functions = [
             ("Health Check", self.test_health_check),
-            ("Create Questions", self.test_create_question),
-            ("Get All Questions", self.test_get_all_questions),
-            ("Add Answers", self.test_add_answers),
+            ("Sample Data Verification", self.test_sample_data_verification),
+            ("Create Knowledge Entries", self.test_create_knowledge_entry),
+            ("Get All Knowledge", self.test_get_all_knowledge),
+            ("Category Filtering", self.test_category_filtering),
             ("Search Functionality", self.test_search_functionality),
             ("Get Categories", self.test_get_categories),
             ("Get Statistics", self.test_get_stats),
+            ("Update Knowledge Entry", self.test_update_knowledge_entry),
+            ("Delete Knowledge Entry", self.test_delete_knowledge_entry),
             ("Edge Cases", self.test_edge_cases),
-            ("Delete Question", self.test_delete_question),
             ("Data Persistence", self.test_data_persistence)
         ]
         
@@ -430,9 +476,9 @@ class BöttcherWikiTester:
             except Exception as e:
                 self.log_test(test_name, False, f"Test function error: {str(e)}")
                 
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 70)
         print("📊 TEST SUMMARY")
-        print("=" * 60)
+        print("=" * 70)
         print(f"Passed: {passed_tests}/{total_tests}")
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         
@@ -448,7 +494,7 @@ class BöttcherWikiTester:
         return passed_tests, total_tests
 
 if __name__ == "__main__":
-    tester = BöttcherWikiTester()
+    tester = BöttcherWikiKnowledgeBaseTester()
     passed, total = tester.run_all_tests()
     
     # Exit with appropriate code
