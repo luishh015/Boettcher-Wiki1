@@ -202,12 +202,14 @@ function App() {
         },
         body: JSON.stringify({
           ...newEntry,
-          tags: tagsArray
+          tags: tagsArray,
+          attachments: uploadedFiles
         })
       });
       
       if (response.ok) {
-        setNewEntry({ question: '', answer: '', category: '', tags: [] });
+        setNewEntry({ question: '', answer: '', category: '', tags: [], attachments: [] });
+        setUploadedFiles([]);
         setShowAddEntry(false);
         fetchKnowledgeEntries();
         fetchCategories();
@@ -221,6 +223,97 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileUpload = async (files) => {
+    const token = localStorage.getItem('admin_token');
+    const newFiles = [];
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${BACKEND_URL}/api/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        
+        if (response.ok) {
+          const uploadedFile = await response.json();
+          newFiles.push(uploadedFile);
+        } else {
+          alert(`Fehler beim Hochladen von ${file.name}`);
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        alert(`Fehler beim Hochladen von ${file.name}`);
+      }
+    }
+    
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    handleFileUpload(files);
+  };
+
+  const handleFileInputChange = (e) => {
+    const files = Array.from(e.target.files);
+    handleFileUpload(files);
+  };
+
+  const removeUploadedFile = (fileId) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
+  const downloadFile = (fileId, filename) => {
+    const link = document.createElement('a');
+    link.href = `${BACKEND_URL}/api/files/${fileId}/download`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getFileIcon = (fileType) => {
+    switch (fileType) {
+      case 'images':
+        return '🖼️';
+      case 'documents':
+        return '📄';
+      case 'spreadsheets':
+        return '📊';
+      case 'presentations':
+        return '📋';
+      default:
+        return '📎';
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const handleAddCategory = async (e) => {
