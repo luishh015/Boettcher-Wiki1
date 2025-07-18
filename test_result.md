@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the Böttcher Wiki backend API thoroughly. The system should handle Core Q&A Functions, Data Flow Testing, Edge Cases, and Database Integration."
+user_problem_statement: "Test the new Böttcher Wiki knowledge base system. The system should handle Knowledge Base Functions, Sample Data Verification, Search and Filter Testing, Data Flow Testing, and Database Integration."
 
 backend:
   - task: "Health Check Endpoint"
@@ -115,9 +115,9 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ GET /api/health endpoint working correctly. Returns proper health status with service name."
+        comment: "✅ GET /api/health endpoint working correctly. Returns proper health status with Böttcher Wiki API service name."
 
-  - task: "Create Questions API"
+  - task: "Sample Data Initialization"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -127,9 +127,9 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ POST /api/questions endpoint working correctly. Successfully creates questions with UUID generation, proper field validation, and database persistence. Tested with multiple questions containing German text, categories, authors, and tags."
+        comment: "✅ Sample data initialization working correctly. Found 5 entries with all 5 expected categories (IT-Support, Qualitätskontrolle, Verwaltung, Produktion, Wartung). All entries have proper structure with required fields (id, question, answer, category, tags)."
 
-  - task: "Get All Questions API"
+  - task: "Create Knowledge Entry API"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -139,9 +139,9 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ GET /api/questions endpoint working correctly. Returns proper QuestionAnswer structure with questions and associated answers. Supports category filtering and proper sorting by creation date."
+        comment: "✅ POST /api/knowledge endpoint working correctly. Successfully creates knowledge entries with UUID generation, proper field validation, and database persistence. Tested with multiple entries containing German text, categories, and tags."
 
-  - task: "Add Answers API"
+  - task: "Get All Knowledge API"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -151,9 +151,9 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ POST /api/questions/{id}/answer endpoint working correctly. Successfully adds answers to questions, updates question answered status, prevents duplicate answers, and handles non-existent questions properly. Minor: API design requires question_id in request body even though it's in URL path - this is redundant but functional."
+        comment: "✅ GET /api/knowledge endpoint working correctly. Returns proper knowledge entry structure with all required fields. Supports proper sorting by creation date."
 
-  - task: "Search Questions API"
+  - task: "Category Filtering API"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -163,7 +163,19 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ POST /api/search endpoint working correctly. Successfully searches questions by text query using regex pattern matching in question_text and tags fields. Supports category filtering and handles empty queries properly."
+        comment: "✅ GET /api/knowledge with category filter working correctly. Successfully filters entries by category (tested with IT-Support category). Returns only entries matching the specified category."
+
+  - task: "Search Knowledge API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/search endpoint working correctly. Successfully searches knowledge entries by text query using regex pattern matching in question, answer, and tags fields. Supports category filtering and handles empty queries properly. Tested with German text search terms."
 
   - task: "Get Categories API"
     implemented: true
@@ -175,7 +187,7 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ GET /api/categories endpoint working correctly. Returns distinct categories from questions collection in proper format."
+        comment: "✅ GET /api/categories endpoint working correctly. Returns all 5 expected categories (IT-Support, Produktion, Qualitätskontrolle, Verwaltung, Wartung) in proper format."
 
   - task: "Get Statistics API"
     implemented: true
@@ -187,9 +199,9 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ GET /api/stats endpoint working correctly. Returns accurate statistics for total_questions, answered_questions, and unanswered_questions with proper mathematical consistency."
+        comment: "✅ GET /api/stats endpoint working correctly. Returns accurate statistics for total_entries and categories_count with proper values reflecting actual database state."
 
-  - task: "Delete Questions API"
+  - task: "Update Knowledge Entry API"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -199,7 +211,19 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ DELETE /api/questions/{id} endpoint working correctly. Successfully deletes questions and associated answers, returns proper error for non-existent questions."
+        comment: "✅ PUT /api/knowledge/{id} endpoint working correctly. Successfully updates existing knowledge entries, preserves entry ID, updates timestamp, and handles non-existent entries with proper 404 error."
+
+  - task: "Delete Knowledge Entry API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ DELETE /api/knowledge/{id} endpoint working correctly. Successfully deletes knowledge entries and returns proper success message. Handles non-existent entries with proper 404 error."
 
   - task: "Database Integration"
     implemented: true
@@ -211,7 +235,7 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ MongoDB integration working correctly. Data persists properly across requests, UUID generation working, collections (questions and answers) properly structured and connected."
+        comment: "✅ MongoDB integration working correctly. Data persists properly across requests, UUID generation working, knowledge_base collection properly structured and connected. All CRUD operations maintain data integrity."
 
   - task: "Edge Cases and Error Handling"
     implemented: true
@@ -223,7 +247,7 @@ backend:
     status_history:
       - working: true
         agent: "testing"
-        comment: "✅ Edge cases handled correctly. Non-existent question returns 404, duplicate answers prevented with 400 error, empty search queries handled gracefully, special characters in German text processed correctly."
+        comment: "✅ Edge cases handled correctly. Non-existent entry operations return proper 404 errors, empty search queries handled gracefully, special characters in German text processed correctly. All error responses follow proper HTTP status codes."
 
 frontend:
   - task: "Frontend Testing"
